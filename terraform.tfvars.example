@@ -1,0 +1,110 @@
+##############################################################################
+# Example terraform.tfvars
+# Copy to terraform.tfvars and fill in values for your environment.
+# Do NOT commit windows_profile.admin_password to source control.
+# Source it from Key Vault using a data source and sensitive variable instead.
+##############################################################################
+
+cluster_name          = "my-aks-prod"
+resource_group_name   = "my-aks-prod-rg"
+location              = "eastus"
+kubernetes_version    = "1.29"
+sku_tier              = "Standard"
+
+tags = {
+  environment = "production"
+  managed-by  = "terraform"
+  team        = "platform"
+}
+
+# ── Networking ────────────────────────────────────────────────────────────────
+vnet_address_space    = ["10.0.0.0/8"]
+node_pool_subnet_cidr = ["10.1.0.0/16"]
+private_dns_zone_name = "privatelink.eastus.azmk8s.io"
+
+# Point to your AD DC if using gMSA / AD-joined nodes
+custom_dns_servers = ["10.0.0.4"]
+
+dns_service_ip = "10.2.0.10"
+service_cidr   = "10.2.0.0/16"
+pod_cidr       = "10.244.0.0/16"
+outbound_type  = "userDefinedRouting"
+
+# Optional: extra subnets inside the VNet
+additional_subnets = {
+  "private-endpoints" = { address_prefixes = ["10.1.128.0/24"] }
+  "ingress"           = { address_prefixes = ["10.1.129.0/24"] }
+}
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+# acr_id = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ContainerRegistry/registries/<name>"
+
+# ── System node pool ──────────────────────────────────────────────────────────
+system_node_pool_vm_size   = "Standard_D4s_v5"
+system_node_count          = 3
+system_node_pool_min_count = 2
+system_node_pool_max_count = 7
+
+# ── Additional Linux node pools ───────────────────────────────────────────────
+linux_node_pools = {
+  "workload" = {
+    vm_size         = "Standard_D8s_v5"
+    min_count       = 2
+    max_count       = 10
+    node_count      = 3
+    os_disk_size_gb = 128
+    node_labels     = { "workload-type" = "general" }
+    node_taints     = []
+    mode            = "User"
+  }
+}
+
+# ── Autoscaler profile ────────────────────────────────────────────────────────
+autoscaler_profile = {
+  expander                         = "least-waste"
+  balance_similar_node_groups      = true
+  scale_down_unneeded              = "5m"
+  scale_down_utilization_threshold = "0.6"
+  skip_nodes_with_local_storage    = false
+}
+
+# ── Windows + gMSA ───────────────────────────────────────────────────────────
+enable_windows_node_pools = true
+
+# admin_password: use a sensitive TF_VAR or Key Vault data source in production
+windows_profile = {
+  admin_username = "winadmin"
+  admin_password = "REPLACE_WITH_KEYVAULT_REF"
+  gmsa = {
+    dns_server  = "10.0.0.4"         # AD DC IP reachable from the node pool subnet
+    root_domain = "corp.contoso.com" # AD domain FQDN
+  }
+}
+
+windows_node_pool = {
+  name            = "win"
+  vm_size         = "Standard_D8s_v5"
+  min_count       = 1
+  max_count       = 5
+  node_count      = 2
+  os_disk_size_gb = 256
+  node_labels     = { "workload-type" = "windows" }
+  node_taints     = ["os=windows:NoSchedule"]
+}
+
+# ── AAD RBAC ──────────────────────────────────────────────────────────────────
+aad_rbac = {
+  azure_rbac_enabled     = true
+  admin_group_object_ids = ["<your-aad-admin-group-object-id>"]
+}
+
+# ── Feature flags ─────────────────────────────────────────────────────────────
+local_account_disabled  = true
+azure_policy_enabled    = true
+oidc_issuer_enabled     = true
+enable_secret_store_csi = true
+
+maintenance_window = {
+  day   = "Sunday"
+  hours = [2, 3] # 02:00–03:00 UTC
+}
